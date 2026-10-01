@@ -155,6 +155,25 @@ export class Xterm {
     public open(parent: HTMLElement) {
         this.terminal = new Terminal(this.options.termOptions);
         const { terminal, fitAddon, overlayAddon, clipboardAddon, webLinksAddon } = this;
+        terminal.parser.registerOscHandler(52, data => {
+            const separator = data.indexOf(';');
+            if (separator < 0) return false;
+
+            const encoded = data.slice(separator + 1).replace(/\s/g, '');
+            if (!encoded || encoded === '?') return false;
+
+            try {
+                const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+                const text = this.textDecoder.decode(bytes);
+                navigator.clipboard.writeText(text).catch(error => {
+                    console.warn('[ttyd] OSC 52 clipboard write failed:', error);
+                });
+                return true;
+            } catch (error) {
+                console.warn('[ttyd] invalid OSC 52 clipboard data:', error);
+                return false;
+            }
+        });
         window.term = terminal as TtydTerminal;
         window.term.fit = () => {
             this.fitAddon.fit();
