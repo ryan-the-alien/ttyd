@@ -93,6 +93,7 @@ export class Xterm {
     private zmodemAddon?: ZmodemAddon;
 
     private socket?: WebSocket;
+    private audioContext?: AudioContext;
     private token: string;
     private opened = false;
     private title?: string;
@@ -114,6 +115,10 @@ export class Xterm {
             d.dispose();
         }
         this.disposables.length = 0;
+        if (this.audioContext && this.audioContext.state !== 'closed') {
+            this.audioContext.close().catch(() => undefined);
+        }
+        this.audioContext = undefined;
     }
 
     @bind
@@ -191,6 +196,15 @@ export class Xterm {
     @bind
     private initListeners() {
         const { terminal, fitAddon, overlayAddon, register, sendData } = this;
+        register(terminal.onBell(this.playBell));
+        register(
+            terminal.onKey(() => {
+                this.audioContext ??= new AudioContext();
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume().catch(() => undefined);
+                }
+            })
+        );
         register(
             terminal.onTitleChange(data => {
                 if (data && data !== '' && !this.titleFixed) {
@@ -220,6 +234,33 @@ export class Xterm {
         );
         register(addEventListener(window, 'resize', () => fitAddon.fit()));
         register(addEventListener(window, 'beforeunload', this.onWindowUnload));
+    }
+
+    @bind
+    private playBell() {
+        this.audioContext ??= new AudioContext();
+        const context = this.audioContext;
+        const play = () => {
+            const oscillator = context.createOscillator();
+            const gain = context.createGain();
+            oscillator.frequency.value = 880;
+            gain.gain.setValueAtTime(0.001, context.currentTime);
+            gain.gain.linearRampToValueAtTime(0.2, context.currentTime + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.15);
+            oscillator.connect(gain);
+            gain.connect(context.destination);
+            oscillator.start();
+            oscillator.stop(context.currentTime + 0.15);
+        };
+
+        if (context.state === 'suspended') {
+            context
+                .resume()
+                .then(play)
+                .catch(() => undefined);
+        } else {
+            play();
+        }
     }
 
     @bind
