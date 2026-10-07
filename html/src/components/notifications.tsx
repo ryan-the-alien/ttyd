@@ -65,7 +65,7 @@ export class Notifications extends Component {
                     status?: string;
                     agent?: string | null;
                 };
-                if (data.status !== 'done' && data.status !== 'idle' && data.status !== 'blocked') return;
+                if (typeof data.status !== 'string' || !data.status.trim()) return;
 
                 const content = buildNotificationContent(data.status, data.agent);
                 if (!content) return;

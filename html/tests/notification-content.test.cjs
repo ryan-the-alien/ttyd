@@ -94,3 +94,10 @@ test('uses a generic agent label when Herdr does not provide an agent name', () 
         body: 'Agent has finished the work',
     });
 });
+
+test('describes future status values and uses the browser default icon when no logo matches', () => {
+    assert.deepEqual(buildNotificationContent('review', 'droid'), {
+        title: 'Droid Agent',
+        body: 'Agent status changed to review',
+    });
+});

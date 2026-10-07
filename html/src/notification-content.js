@@ -45,6 +45,10 @@ function buildNotificationContent(status, agent) {
     if (status === 'blocked') {
         return { ...content, body: 'Agent is waiting for your approval or input' };
     }
+    if (typeof status === 'string' && status.trim()) {
+        const displayStatus = status.trim().replace(/[_-]+/g, ' ');
+        return { ...content, body: `Agent status changed to ${displayStatus}` };
+    }
     return null;
 }
 
