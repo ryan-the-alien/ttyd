@@ -1,4 +1,6 @@
 const { src, dest, task, series } = require('gulp');
+const fs = require('fs');
+const path = require('path');
 const clean = require('gulp-clean');
 const gzip = require('gulp-gzip');
 const inlineSource = require('gulp-inline-source');
@@ -60,9 +62,46 @@ task('worker', () => {
         .pipe(dest('../src/'));
 });
 
+task('notification-icons', done => {
+    const icons = [
+        ['amp', 'src/assets/notifications/amp.png'],
+        ['antigravity', 'src/assets/notifications/antigravity.png'],
+        ['claude', 'src/assets/notifications/claude.png'],
+        ['cline', 'src/assets/notifications/cline.png'],
+        ['codex', 'src/assets/notifications/codex.png'],
+        ['copilot', 'src/assets/notifications/copilot.png'],
+        ['cursor', 'src/assets/notifications/cursor.png'],
+        ['devin', 'src/assets/notifications/devin.png'],
+        ['gemini', 'src/assets/notifications/gemini.png'],
+        ['grok', 'src/assets/notifications/grok.png'],
+        ['hermes', 'src/assets/notifications/hermes.png'],
+        ['kilo', 'src/assets/notifications/kilo.png'],
+        ['kimi', 'src/assets/notifications/kimi.png'],
+        ['kiro', 'src/assets/notifications/kiro.png'],
+        ['mastra', 'src/assets/notifications/mastra.png'],
+        ['opencode', 'src/assets/notifications/opencode.png'],
+        ['pi', 'src/assets/notifications/pi.png'],
+        ['qoder', 'src/assets/notifications/qoder.png'],
+        ['qwen', 'src/assets/notifications/qwen.png'],
+    ];
+    const declarations = icons.map(([name, file]) => {
+        const bytes = fs.readFileSync(path.resolve(__dirname, file));
+        const rows = [];
+        for (let i = 0; i < bytes.length; i += 16) {
+            rows.push(`    ${Array.from(bytes.subarray(i, i + 16), byte => `0x${byte.toString(16).padStart(2, '0')}`).join(', ')}`);
+        }
+        return (
+            `static const unsigned char notification_${name}_icon[] = {\n${rows.join(',\n')}\n};\n` +
+            `static const unsigned long notification_${name}_icon_len = sizeof(notification_${name}_icon);\n`
+        );
+    });
+    fs.writeFileSync(path.resolve(__dirname, '../src/notification-icons.h'), declarations.join('\n'));
+    done();
+});
+
 task(
     'default',
-    series('inline', 'worker', () => {
+    series('inline', 'worker', 'notification-icons', () => {
         return src('dist/inline.html')
             .pipe(
                 through2.obj((file, enc, cb) => {

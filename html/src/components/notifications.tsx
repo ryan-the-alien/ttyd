@@ -1,55 +1,44 @@
 import { Realtime } from 'ably';
-import { Component, h } from 'preact';
+import { Component } from 'preact';
+import { buildNotificationContent } from '../notification-content';
 
 const subscribeKey = process.env.ABLY_SUBSCRIBE_KEY;
 const channelName = process.env.ABLY_NOTIFICATION_CHANNEL || 'herdr-agent-completed';
 
-interface State {
-    enabled: boolean;
-    status: string;
-    connecting: boolean;
-}
-
-export class Notifications extends Component<{}, State> {
+export class Notifications extends Component {
     private realtime?: Realtime;
     private notificationRegistration?: ServiceWorkerRegistration;
+    private enableStarted = false;
 
-    constructor() {
-        super();
-        this.state = { enabled: false, status: '', connecting: false };
+    componentDidMount() {
+        document.addEventListener('pointerdown', this.enableOnInteraction, true);
+        document.addEventListener('keydown', this.enableOnInteraction, true);
     }
 
     componentWillUnmount() {
+        this.removeInteractionListeners();
         this.realtime?.close();
     }
 
     render() {
-        if (!subscribeKey) return null;
-
-        const { enabled, status, connecting } = this.state;
-        return (
-            <div class="notification-control">
-                <button type="button" onClick={this.enable} disabled={enabled || connecting}>
-                    {enabled ? 'Notifications enabled' : connecting ? 'Connecting…' : 'Enable notifications'}
-                </button>
-                <span role="status" aria-live="polite">
-                    {status}
-                </span>
-            </div>
-        );
+        return null;
     }
 
     private enable = async () => {
+        if (this.enableStarted) return;
+        this.enableStarted = true;
+
         if (!('Notification' in window)) {
-            this.setState({ status: 'This browser does not support desktop notifications.' });
+            this.enableStarted = false;
+            console.warn('ttyd notifications: this browser does not support desktop notifications.');
             return;
         }
 
-        this.setState({ connecting: true, status: 'Requesting permission…' });
         try {
             const permission = await Notification.requestPermission();
             if (permission !== 'granted') {
-                this.setState({ connecting: false, status: 'Notification permission was not granted.' });
+                this.enableStarted = false;
+                console.info(`ttyd notifications: permission ${permission}; notifications are disabled.`);
                 return;
             }
 
@@ -57,8 +46,7 @@ export class Notifications extends Component<{}, State> {
                 try {
                     this.notificationRegistration = await navigator.serviceWorker.register('notifications-sw.js');
                 } catch (error) {
-                    const message = error instanceof Error ? error.message : String(error);
-                    this.setState({ status: `Could not enable notification click handling: ${message}` });
+                    console.warn('ttyd notifications: could not register the notification click handler.', error);
                 }
             }
 
@@ -66,12 +54,8 @@ export class Notifications extends Component<{}, State> {
             const realtime = new Realtime({ key: subscribeKey, clientId: 'ttyd-browser' });
             this.realtime = realtime;
             realtime.connection.on('failed', change => {
-                const reason = change.reason?.message;
-                this.setState({
-                    enabled: false,
-                    connecting: false,
-                    status: reason ? `Ably connection failed: ${reason}` : 'Ably connection failed.',
-                });
+                this.enableStarted = false;
+                console.error('ttyd notifications: Ably connection failed.', change.reason);
             });
             const channel = realtime.channels.get(channelName);
             await channel.subscribe(async message => {
@@ -80,39 +64,48 @@ export class Notifications extends Component<{}, State> {
                 const data = message.data as {
                     status?: string;
                     agent?: string | null;
-                    title?: string | null;
-                    pane_id?: string;
                 };
-                if (data.status !== 'done') return;
+                if (data.status !== 'done' && data.status !== 'idle' && data.status !== 'blocked') return;
 
-                const title = data.agent ? `${data.agent} finished` : 'Agent finished';
-                const body = data.title || data.pane_id || 'Work completed';
-                this.setState({ status: `Completion received for ${body}; showing notification…` });
+                const content = buildNotificationContent(data.status, data.agent);
+                if (!content) return;
+                const { title, body } = content;
+                const options: NotificationOptions = {
+                    body,
+                    data: { url: window.location.href },
+                };
+                if (content.icon) options.icon = new URL(content.icon, window.location.href).href;
                 try {
                     if (this.notificationRegistration) {
-                        await this.notificationRegistration.showNotification(title, {
-                            body,
-                            data: { url: window.location.href },
-                        });
+                        await this.notificationRegistration.showNotification(title, options);
                     } else {
-                        const notification = new Notification(title, { body });
+                        const notification = new Notification(title, options);
                         notification.onclick = () => window.focus();
-                        notification.onshow = () => this.setState({ status: 'Desktop notification shown.' });
+                        notification.onshow = () => console.debug('ttyd notifications: desktop notification shown.');
                         notification.onerror = () =>
-                            this.setState({ status: 'The browser could not display the desktop notification.' });
+                            console.error('ttyd notifications: the browser could not display the notification.');
                     }
-                    this.setState({ status: 'Desktop notification requested.' });
+                    console.debug(`ttyd notifications: requested “${title}” notification.`);
                 } catch (error) {
-                    const reason = error instanceof Error ? error.message : String(error);
-                    this.setState({ status: `Could not show desktop notification: ${reason}` });
+                    console.error('ttyd notifications: could not show desktop notification.', error);
                 }
             });
-            this.setState({ enabled: true, connecting: false, status: `Listening on ${channelName}` });
+            console.info(`ttyd notifications: listening on ${channelName}.`);
         } catch (error) {
+            this.enableStarted = false;
             this.realtime?.close();
             this.realtime = undefined;
-            const message = error instanceof Error ? error.message : String(error);
-            this.setState({ connecting: false, status: `Could not connect to Ably: ${message}` });
+            console.error('ttyd notifications: could not connect to Ably.', error);
         }
     };
+
+    private enableOnInteraction = () => {
+        this.removeInteractionListeners();
+        void this.enable();
+    };
+
+    private removeInteractionListeners() {
+        document.removeEventListener('pointerdown', this.enableOnInteraction, true);
+        document.removeEventListener('keydown', this.enableOnInteraction, true);
+    }
 }

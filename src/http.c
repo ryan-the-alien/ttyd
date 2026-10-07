@@ -3,6 +3,7 @@
 #include <zlib.h>
 
 #include "html.h"
+#include "notification-icons.h"
 #include "notifications-sw.h"
 #include "server.h"
 #include "utils.h"
@@ -128,6 +129,60 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
 
         pss->buffer = pss->ptr = strdup(notifications_sw_script);
         pss->len = notifications_sw_script_len;
+        lws_callback_on_writable(wsi);
+        break;
+      }
+
+      struct notification_icon {
+        const char *name;
+        const unsigned char *data;
+        unsigned long len;
+      } notification_icons[] = {
+          {"amp", notification_amp_icon, notification_amp_icon_len},
+          {"antigravity", notification_antigravity_icon, notification_antigravity_icon_len},
+          {"claude", notification_claude_icon, notification_claude_icon_len},
+          {"cline", notification_cline_icon, notification_cline_icon_len},
+          {"codex", notification_codex_icon, notification_codex_icon_len},
+          {"copilot", notification_copilot_icon, notification_copilot_icon_len},
+          {"cursor", notification_cursor_icon, notification_cursor_icon_len},
+          {"devin", notification_devin_icon, notification_devin_icon_len},
+          {"gemini", notification_gemini_icon, notification_gemini_icon_len},
+          {"grok", notification_grok_icon, notification_grok_icon_len},
+          {"hermes", notification_hermes_icon, notification_hermes_icon_len},
+          {"kilo", notification_kilo_icon, notification_kilo_icon_len},
+          {"kimi", notification_kimi_icon, notification_kimi_icon_len},
+          {"kiro", notification_kiro_icon, notification_kiro_icon_len},
+          {"mastra", notification_mastra_icon, notification_mastra_icon_len},
+          {"opencode", notification_opencode_icon, notification_opencode_icon_len},
+          {"pi", notification_pi_icon, notification_pi_icon_len},
+          {"qoder", notification_qoder_icon, notification_qoder_icon_len},
+          {"qwen", notification_qwen_icon, notification_qwen_icon_len},
+      };
+      const unsigned char *icon_data = NULL;
+      unsigned long icon_len = 0;
+      for (size_t i = 0; i < sizeof(notification_icons) / sizeof(notification_icons[0]); i++) {
+        char icon_path[256];
+        snprintf(icon_path, sizeof(icon_path), "%snotifications/%s.png", endpoints.index, notification_icons[i].name);
+        if (strcmp(pss->path, icon_path) == 0) {
+          icon_data = notification_icons[i].data;
+          icon_len = notification_icons[i].len;
+          break;
+        }
+      }
+      if (icon_data != NULL) {
+        const char *content_type = "image/png";
+        if (lws_add_http_header_status(wsi, HTTP_STATUS_OK, &p, end) ||
+            lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_CONTENT_TYPE, (const unsigned char *)content_type,
+                                         (int)strlen(content_type), &p, end) ||
+            lws_add_http_header_content_length(wsi, icon_len, &p, end) ||
+            lws_finalize_http_header(wsi, &p, end) ||
+            lws_write(wsi, buffer + LWS_PRE, p - (buffer + LWS_PRE), LWS_WRITE_HTTP_HEADERS) < 0)
+          return 1;
+
+        pss->buffer = pss->ptr = malloc(icon_len);
+        if (pss->buffer == NULL) return 1;
+        memcpy(pss->buffer, icon_data, icon_len);
+        pss->len = icon_len;
         lws_callback_on_writable(wsi);
         break;
       }
