@@ -88,7 +88,11 @@ task('notification-icons', done => {
         const bytes = fs.readFileSync(path.resolve(__dirname, file));
         const rows = [];
         for (let i = 0; i < bytes.length; i += 16) {
-            rows.push(`    ${Array.from(bytes.subarray(i, i + 16), byte => `0x${byte.toString(16).padStart(2, '0')}`).join(', ')}`);
+            rows.push(
+                `    ${Array.from(bytes.subarray(i, i + 16), byte => `0x${byte.toString(16).padStart(2, '0')}`).join(
+                    ', '
+                )}`
+            );
         }
         return (
             `static const unsigned char notification_${name}_icon[] = {\n${rows.join(',\n')}\n};\n` +

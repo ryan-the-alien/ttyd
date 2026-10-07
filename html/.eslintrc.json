@@ -2,6 +2,15 @@
   "extends": "./node_modules/gts/",
   "overrides": [
     {
+      "files": ["src/notifications-sw.js"],
+      "env": {
+        "serviceworker": true
+      },
+      "parserOptions": {
+        "ecmaVersion": 2020
+      }
+    },
+    {
       "files": ["**/*.ts", "**/*.tsx"],
       "parserOptions": {
         "jsxPragma": "h"
