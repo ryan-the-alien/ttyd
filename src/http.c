@@ -3,6 +3,7 @@
 #include <zlib.h>
 
 #include "html.h"
+#include "notifications-sw.h"
 #include "server.h"
 #include "utils.h"
 
@@ -112,6 +113,24 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
 
       p = buffer + LWS_PRE;
       end = p + sizeof(buffer) - LWS_PRE;
+
+      char worker_path[256];
+      snprintf(worker_path, sizeof(worker_path), "%snotifications-sw.js", endpoints.index);
+      if (strcmp(pss->path, worker_path) == 0) {
+        const char *content_type = "application/javascript;charset=utf-8";
+        if (lws_add_http_header_status(wsi, HTTP_STATUS_OK, &p, end) ||
+            lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_CONTENT_TYPE, (const unsigned char *)content_type,
+                                         (int)strlen(content_type), &p, end) ||
+            lws_add_http_header_content_length(wsi, notifications_sw_script_len, &p, end) ||
+            lws_finalize_http_header(wsi, &p, end) ||
+            lws_write(wsi, buffer + LWS_PRE, p - (buffer + LWS_PRE), LWS_WRITE_HTTP_HEADERS) < 0)
+          return 1;
+
+        pss->buffer = pss->ptr = strdup(notifications_sw_script);
+        pss->len = notifications_sw_script_len;
+        lws_callback_on_writable(wsi);
+        break;
+      }
 
       if (strcmp(pss->path, endpoints.token) == 0) {
         const char *credential = server->credential != NULL ? server->credential : "";

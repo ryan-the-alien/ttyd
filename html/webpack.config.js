@@ -1,4 +1,5 @@
 const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const { merge } = require('webpack-merge');
 const ESLintPlugin = require('eslint-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
@@ -6,6 +7,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
+const webpack = require('webpack');
 
 const devMode = process.env.NODE_ENV !== 'production';
 
@@ -33,6 +35,11 @@ const baseConfig = {
     },
     resolve: {
         extensions: ['.tsx', '.ts', '.js'],
+        alias: process.env.ABLY_SUBSCRIBE_KEY
+            ? {}
+            : {
+                  './notifications$': path.resolve(__dirname, 'src/components/notifications-disabled.tsx'),
+              },
     },
     plugins: [
         new ESLintPlugin({
@@ -45,6 +52,12 @@ const baseConfig = {
         new MiniCssExtractPlugin({
             filename: devMode ? '[name].css' : '[name].[contenthash].css',
             chunkFilename: devMode ? '[id].css' : '[id].[contenthash].css',
+        }),
+        new webpack.DefinePlugin({
+            'process.env.ABLY_SUBSCRIBE_KEY': JSON.stringify(process.env.ABLY_SUBSCRIBE_KEY || ''),
+            'process.env.ABLY_NOTIFICATION_CHANNEL': JSON.stringify(
+                process.env.ABLY_NOTIFICATION_CHANNEL || 'herdr-agent-completed'
+            ),
         }),
         new HtmlWebpackPlugin({
             inject: false,

@@ -44,9 +44,25 @@ task('inline', () => {
     return src('dist/index.html').pipe(inlineSource(options)).pipe(rename('inline.html')).pipe(dest('dist/'));
 });
 
+task('worker', () => {
+    return src('src/notifications-sw.js')
+        .pipe(
+            through2.obj((file, enc, cb) => {
+                const source = file.contents.toString();
+                file.contents = Buffer.from(
+                    `const char notifications_sw_script[] = ${JSON.stringify(source)};\n` +
+                        'const unsigned int notifications_sw_script_len = sizeof(notifications_sw_script) - 1;\n'
+                );
+                return cb(null, file);
+            })
+        )
+        .pipe(rename('notifications-sw.h'))
+        .pipe(dest('../src/'));
+});
+
 task(
     'default',
-    series('inline', () => {
+    series('inline', 'worker', () => {
         return src('dist/inline.html')
             .pipe(
                 through2.obj((file, enc, cb) => {
